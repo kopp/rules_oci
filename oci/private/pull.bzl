@@ -105,6 +105,7 @@ def _download(rctx, authn, identifier, output, resource, download_fn = download.
     else:
         util.warning(rctx, "Fetching from {}@{} without an integrity hash. The result will not be cached.".format(rctx.attr.repository, identifier))
 
+    print("{} downloading {} with sha256 {}".format(rctx.name, registry_url, sha256))
     return download_fn(
         rctx,
         output = output,
@@ -221,6 +222,7 @@ def _oci_pull_impl(rctx):
                 rctx.attr.repository,
                 rctx.attr.platform,
             ))
+        print("{} downloading matching manifest {}".format(rctx.name, matching_manifest["digest"]))
         manifest, size, digest = downloader.download_manifest(matching_manifest["digest"], "manifest.json")
     else:
         fail("Unrecognized mediaType {} in manifest file".format(manifest["mediaType"]))
@@ -229,6 +231,7 @@ def _oci_pull_impl(rctx):
     rctx.template(_digest_into_blob_path(digest), "manifest.json")
 
     config_output_path = _digest_into_blob_path(manifest["config"]["digest"])
+    print("{} downloading blob {} to {}".format(rctx.name, manifest["config"]["digest"], config_output_path))
     downloader.download_blob(manifest["config"]["digest"], config_output_path)
 
     # if the user provided a platform for the image, validate it matches the config as best effort.
