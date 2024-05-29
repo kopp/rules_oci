@@ -105,7 +105,7 @@ def _download(rctx, authn, identifier, output, resource, download_fn = download.
     else:
         util.warning(rctx, "Fetching from {}@{} without an integrity hash. The result will not be cached.".format(rctx.attr.repository, identifier))
 
-    print("{} downloading {} with sha256 {}".format(rctx.name, registry_url, sha256))
+    # print("{} downloading {} with sha256 {}".format(rctx.name, registry_url, sha256))
     return download_fn(
         rctx,
         output = output,
@@ -204,6 +204,11 @@ def _oci_pull_impl(rctx):
 
     manifest, size, digest = downloader.download_manifest(rctx.attr.identifier, "manifest.json")
 
+    manifest_a = manifest
+    manifest_b = None
+
+    logs = []
+
     if manifest["mediaType"] in _SUPPORTED_MEDIA_TYPES["manifest"]:
         # plain image manifest: use the contents.
         pass
@@ -215,6 +220,7 @@ def _oci_pull_impl(rctx):
                 rctx.attr.repository,
             ))
 
+        logs.append("{} looking for platform {} in manifest {}".format(rctx.name, rctx.attr.platform, json.encode_indent(manifest)))
         matching_manifest = _find_platform_manifest(manifest, rctx.attr.platform)
         if not matching_manifest:
             fail("No matching manifest found in image {}/{} for platform {}".format(
@@ -222,8 +228,10 @@ def _oci_pull_impl(rctx):
                 rctx.attr.repository,
                 rctx.attr.platform,
             ))
-        print("{} downloading matching manifest {}".format(rctx.name, matching_manifest["digest"]))
+        logs.append("{} downloading matching manifest {}".format(rctx.name, matching_manifest["digest"]))
         manifest, size, digest = downloader.download_manifest(matching_manifest["digest"], "manifest.json")
+
+        manifest_b = manifest
     else:
         fail("Unrecognized mediaType {} in manifest file".format(manifest["mediaType"]))
 
@@ -231,14 +239,17 @@ def _oci_pull_impl(rctx):
     rctx.template(_digest_into_blob_path(digest), "manifest.json")
 
     config_output_path = _digest_into_blob_path(manifest["config"]["digest"])
-    print("{} downloading blob {} to {}".format(rctx.name, manifest["config"]["digest"], config_output_path))
+    logs.append("{} downloading blob {} to {} based on manifest {}".format(rctx.name, manifest["config"]["digest"], config_output_path, json.encode_indent(manifest)))
     downloader.download_blob(manifest["config"]["digest"], config_output_path)
 
     # if the user provided a platform for the image, validate it matches the config as best effort.
     if rctx.attr.platform:
         config_bytes = rctx.read(config_output_path)
         config = json.decode(config_bytes)
-        util.validate_image_platform(rctx, config)
+        msg = util.validate_image_platform(rctx, config)
+        if msg:
+            print("\n---------------\n".join(logs))
+            fail(msg)
 
     # download all layers
     # TODO: we should avoid eager-download of the layers ("shallow pull")
