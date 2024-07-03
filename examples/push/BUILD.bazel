@@ -25,7 +25,7 @@ oci_push(
 oci_push(
     name = "push_image_wo_tags",
     image = ":image",
-    repository = "index.docker.io/<ORG>/image",
+    repository = "localhost:500/imageyo",
 )
 
 oci_image_index(
